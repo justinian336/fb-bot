@@ -121,18 +121,20 @@ module.exports = {
 			}
 		});
 	},
-	setContext(user, context, callback){
+	setContext: function(user, context, callback){
 		let setContextParams = createUpdateSurveyRequest(user, context.question, null, context.value);
 		dynamodb.updateItem(setContextParams, (err, data)=>{
 			if(err){
 				console.log("Error: ", err);
 				throw err;
 			}
-			console.log("Successfully set context:", data);
-			callback(data);
+			else{
+				console.log("Successfully set context:", data);
+				callback(data);
+			}
 		});
 	},
-	getContext(user, callback){
+	getContext: function(user, callback){
 		this.get(user, (data)=>{
 			if(data.Item){
 				let context = data.Item.context;
@@ -141,9 +143,8 @@ module.exports = {
 				} else {
 					null
 				}
-			} else{
-
-
+			} else {
+				null
 			}
 		});
 	}

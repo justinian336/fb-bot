@@ -1,0 +1,19 @@
+{
+  "name": "fb-bot",
+  "version": "1.0.0",
+  "description": "Facebook bot that runs on an AWS lambda function and uses DynamoDB for data storage.",
+  "main": "handler.js",
+  "scripts": {
+    "test": "echo \"Error: no test specified\" && exit 1"
+  },
+  "repository": {
+    "type": "git",
+    "url": "git+https://github.com/justinian336/fb-bot.git"
+  },
+  "author": "justinian336",
+  "license": "ISC",
+  "bugs": {
+    "url": "https://github.com/justinian336/fb-bot/issues"
+  },
+  "homepage": "https://github.com/justinian336/fb-bot#readme"
+}

@@ -1,7 +1,10 @@
 'use strict';
 
 let https = require('https'),
-	dutils = require('./dynamo_utils.js');
+	dutils = require('./dynamo_utils.js'),
+	constants = require('./constants.js'),
+	questions = constants.questions,
+	_ = require('underscore');
 
 const VERIFICATION_TOKEN = process.env['VERIFICATION_TOKEN'],
 	PAGE_ACCESS_TOKEN = process.env['PAGE_ACCESS_TOKEN'],
@@ -26,7 +29,7 @@ let callSendAPI = function(messageData){
 			host: "graph.facebook.com",
 			path: path,
 			method: 'POST',
-			headers:{
+			headers: {
 				'Content-Type': 'application/json'
 			}
 		},
@@ -43,7 +46,7 @@ let callSendAPI = function(messageData){
   		req.on('error', (e) => {
   			console.log("Could not contact the Graph API");
   		});
-  		
+
   	console.log("data ", body);
 
   	req.write(body);
@@ -56,7 +59,7 @@ let handleVerificationRequest = function(event, callback){
 
 		let response;
 		if(verificationToken === VERIFICATION_TOKEN){
-			response = {
+			let response = {
 				'body': parseInt(queryParams['hub.challenge']),
 				'statusCode': 200
 			}
@@ -65,8 +68,8 @@ let handleVerificationRequest = function(event, callback){
 				'body': 'Token equivocado',
 				'statusCode': 422
 			}
-		callback(null, response);
 		}
+  callback(null, response);
 }
 
 let handleUserInteraction = function(event, callback){
@@ -77,7 +80,7 @@ let handleUserInteraction = function(event, callback){
 		    	if(m.message.quick_reply){
 		    		let payload = m.message.quick_reply.payload;
 		    		switch(payload){
-		    			case 'GET_STARTED_PAYLOAD': 
+		    			case 'GET_STARTED_PAYLOAD':
 		    				sendMenu(m.sender.id, 'Selecciona una de las opciones siguientes:');
 		    				break;
 		    			case 'CONOCER':
@@ -92,11 +95,31 @@ let handleUserInteraction = function(event, callback){
 		    			case 'SOBRE_MANEJO_DE_DATOS':
 		    				sendMessage(m.sender.id, 'Los datos que proveas serán para uso exclusivo de este grupo y sus miembros.');
 		    				break;
+		    			case 'NO_PROVEER_DATOS':
+		    				sendMessage(m.sender.id, 'Gracias por tu interés en el grupo. Ahora mismo te enviamos una invitación. Puedes actualizar tus datos en cualquier momento por este medio.');
+		    				break;
+		    			case 'PROVEER_DATOS':
+		    				sendMakeQuestion(m.sender.id);
+		    				break;
 		    			default:
 		    				sendMessage(m.sender.id, 'Beep beep');
 		    		}
 		    	}
 		    	else{
+		    		dutils.getContext(m.sender.id, (context)=>{
+    					if(context){
+    						dutils.put(m.sender.id, context.question, m.message.text, (response)=>{
+    							dutils.setContext(m.sender.id, {
+    								'question': context.question,
+                    'status': 'DONE'
+    							}, (data)=>{
+                    sendMakeQuestion(m.sender.id);
+                  });
+    						});
+    					} else {
+                sendMessage(m.sender.id, 'Beep beep');
+    					}
+    				});
 					sendMenu(m.sender.id, 'Beep beep');
 		    	}
 		    }
@@ -180,7 +203,60 @@ let sendAskForData = function(recipientId, text){
 	callSendAPI(messageData);
 }
 
-let sendMakeQuestion = function(recipientId, text){
+let getNextQuestionIndex = function(context){
+	let matchingIndex = _.findIndex(questions, (q)=>{q.value == context.question});
+	if(matchingIndex === -1){
+		console.log("The question is not in the questionnaire!");
+	} else{
+		switch(context.status){
+			case 'IN_PROGRESS':
+				return question[matchingIndex]
+				break;
+			case 'DONE':
+				if(matchingIndex + 1 < length(questions)){
+					return matchingIndex + 1;
+				} else {
+					console.log("This was the last question");
+					return -88;
+				}
+				break;
+			default: console.log("Context status is unknown.");
+
+		}
+	}
+}
+
+let sendMakeQuestion = function(recipientId){
+	dutils.getContext(recipientId, (context)=>{
+		if(context){
+			let nextQuestionIndex = getNextQuestionIndex(context);
+			if(nextQuestionIndex === -99){
+				sendMessage(recipientId, "Has completado el questionario. En este momento te enviamos la invitación para unirte al grupo.");
+			} else {
+				let nextQuestion = questions[nextQuestionIndex];
+				dutils.getAndPutOrPatch(recipientId, nextQuestion.value, '', 'IN_PROGRESS', (data)=>{
+					if(data){
+						sendMessage(recipientId, nextQuestion.text);
+					} else {
+						console.log('Something happened!');
+					}
+				});
+			}
+		} else {
+			let nextQuestion = questions[0];
+			dutils.setContext(recipientId, {
+				'question': nextQuestion.value,
+				'status': 'IN_PROGRESS'
+			}, (data)=>{
+				if(data){
+					sendMessage(recipientId, nextQuestion.text);
+				} else {
+					console.log('Something happened!');
+				}
+			});
+		}
+	});
+
 	let messageData = {
 		recipientId: {
 			id: recipientId
@@ -195,6 +271,5 @@ let sendMakeQuestion = function(recipientId, text){
 			}]
 		}
 	}
-
 	callSendAPI(messageData);
 };
